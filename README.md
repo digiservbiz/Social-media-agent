@@ -68,6 +68,24 @@ edit it, then send. Nothing posts automatically — every reply needs a human cl
 TikTok comment access isn't available on the standard posting API tier, so that one's
 a stub until TikTok grants broader access.
 
+**Direct messages** — view inbound DM conversations (Facebook, Instagram, X), get an
+AI-drafted reply, edit it, then send. Same human-approval model as comments. There's
+also an opt-in **first-message auto-acknowledge**: when a new contact messages you for
+the first time, it can auto-send a canned "thanks, we'll get back to you" — a standard,
+non-manipulative pattern (like an out-of-office reply), sent once per contact, never
+repeated. This requires setting up a Meta webhook (see below); X and LinkedIn don't
+have the API access needed for a real-time equivalent.
+
+### Setting up the Meta webhook (for DM auto-acknowledge)
+
+1. Set `META_WEBHOOK_VERIFY_TOKEN` in `.env` to any random string.
+2. In your Meta App dashboard → Webhooks → add a subscription:
+   - Callback URL: `https://yourdomain.com/webhooks/meta`
+   - Verify token: the same string you put in `.env`
+   - Subscribe to the `messages` field for Page/Instagram
+3. Toggle "Auto-acknowledge" on for the account in the dashboard's Direct Messages
+   panel, and edit the canned message if you want something other than the default.
+
 **Retry logic** — a failed publish due to rate-limiting (HTTP 429) is retried once
 automatically after a short delay.
 
@@ -109,6 +127,11 @@ POST /api/posts/:id/comments/:accountId/:commentId/draft-reply   { commentText }
 POST /api/posts/:id/comments/:accountId/:commentId/reply         { text }
 
 POST /api/captions/generate                 { topic, platforms: [...] }
+
+GET  /api/dms/:accountId/conversations                              -> list DM conversations
+GET  /api/dms/:accountId/conversations/:id/messages                 -> messages in one conversation
+POST /api/dms/:accountId/conversations/:id/draft-reply   { history }  -> AI-drafted reply, not sent
+POST /api/dms/:accountId/conversations/:id/reply         { text }     -> actually sends
 
 GET  /api/analytics/summary?days=7          -> totals, top posts, best posting hours
 POST /api/analytics/followers/refresh       -> snapshot current follower counts
@@ -156,4 +179,6 @@ redirect URIs must be HTTPS in production for every platform except local testin
   created them — if app access is revoked on Facebook's side, reconnect.
 - **LinkedIn**: no view/impression counts or follower counts for personal profile
   posts — that data only exists for Company Page posts via a separate, more
-  restricted API scope.
+  restricted API scope. No public DM API for third-party apps either.
+- **X DMs**: the Direct Message endpoints require a paid API tier above free — will
+  403 until you're on Basic/Pro. Manual draft/send still works once you have access.
