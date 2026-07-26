@@ -1,8 +1,9 @@
 # Social Poster
 
-Self-hosted app that posts to LinkedIn, Facebook, Instagram, X, and TikTok from one
-dashboard or one API call, and pulls back engagement stats (views, likes, comments,
-shares) per post. Standalone — no dependency on any other workflow.
+Self-hosted app that posts to LinkedIn, Facebook, Instagram, X, and TikTok, pulls back
+engagement stats, drafts AI captions and comment replies, tracks followers, and
+supports an approval queue for multi-client use. Standalone — no dependency on any
+other workflow.
 
 ## Setup
 
@@ -20,9 +21,16 @@ For each platform you want, create a free developer app and put the credentials 
 | X         | developer.twitter.com/en/portal/dashboard         | Free tier: ~500 posts/month |
 | TikTok    | developers.tiktok.com/apps                        | Public posting needs app review (free, takes a few days). Sandbox works immediately for testing |
 
-Set each `*_REDIRECT_URI` to match what you register in the platform's app settings:
-`http://localhost:3300/auth/<platform>/callback` locally, or
-`https://yourdomain.com/auth/<platform>/callback` once deployed.
+Set each `*_REDIRECT_URI` to match what you register in the platform's app settings.
+
+For AI captions and comment-reply drafting, add an OpenRouter key:
+```
+OPENROUTER_API_KEY=...   # https://openrouter.ai/keys
+OPENROUTER_MODEL=anthropic/claude-3.5-haiku   # or any OpenRouter model
+```
+
+Optional: set `WEBHOOK_URL` to have the app POST `{ event: "post.published", post }` to
+your own endpoint (e.g. an n8n webhook) after every publish attempt.
 
 ## Run
 
@@ -31,58 +39,93 @@ npm start        # production
 npm run dev       # auto-restart on file changes
 ```
 
-Open `http://localhost:3300`. Click a platform pill to connect it, write a post, pick
-which connected accounts to send it to, optionally set a schedule time, hit Post.
-Every published post in the History section gets a "Refresh stats" button that pulls
-live views/likes/comments/shares from that platform.
+Open `http://localhost:3300`.
+
+## Features
+
+**Posting** — write once, optionally override text per platform, attach one or more
+media URLs (multiple = carousel on Instagram/Facebook), post now or schedule for later.
+
+**Approval queue** — check "Require approval" on a post and it lands in the Pending
+list instead of going live. Approve or reject from the dashboard. Useful when you're
+posting on behalf of clients and someone else needs to sign off first.
+
+**Multi-client tagging** — tag each connected account and each post with a client name,
+then filter the History view by tag.
+
+**AI caption drafting** — give a topic, get a caption drafted per selected platform
+(different length/tone rules baked in per platform), editable before you post.
+
+**Analytics** — a summary tab aggregates views/likes/comments/shares by platform over
+the last N days, ranks your top posts by an engagement score, and surfaces which
+hour-of-day your best posts tend to go out at (needs enough post history to be useful).
+
+**Follower tracking** — one button pulls current follower counts across all connected
+accounts and stores a snapshot so you can see growth over time.
+
+**Comment handling** — view comments on any published post, get an AI-drafted reply,
+edit it, then send. Nothing posts automatically — every reply needs a human click.
+TikTok comment access isn't available on the standard posting API tier, so that one's
+a stub until TikTok grants broader access.
+
+**Retry logic** — a failed publish due to rate-limiting (HTTP 429) is retried once
+automatically after a short delay.
+
+## What's deliberately NOT in here
+
+Automated DMs soliciting likes, follows, or reactions to "grow" an account. Every
+platform's terms of service treats that as inauthentic engagement / spam, and it's a
+fast way to get pages suspended rather than grown. If you want DM automation for
+something legitimate — e.g. auto-responding to inbound customer DMs — that's a
+different, addable feature; just not this one.
 
 ## API
 
-Everything the dashboard does is also a plain HTTP endpoint, so you can drive it from
-anywhere (curl, a script, n8n, etc.) without touching the UI:
-
 ```
-GET  /api/accounts              -> list connected accounts (id, platform, name)
-DELETE /api/accounts/:id        -> disconnect an account
+GET  /api/accounts                          -> list connected accounts
+PATCH /api/accounts/:id                     -> set clientTag: { "clientTag": "..." }
+DELETE /api/accounts/:id                    -> disconnect an account
 
 POST /api/posts
-Content-Type: application/json
 {
-  "text": "Your post text",
-  "accountIds": ["<id from GET /api/accounts>"],
-  "mediaUrls": ["https://..."],   // required for Instagram/TikTok
-  "link": "https://...",          // optional, Facebook/LinkedIn
-  "scheduledFor": "2026-08-01T09:00:00Z"  // omit to post immediately
+  "text": "fallback text",
+  "platformText": { "x": "shorter version", "linkedin": "longer version" },
+  "accountIds": ["..."],
+  "mediaUrls": ["https://..."],
+  "link": "https://...",
+  "scheduledFor": "2026-08-01T09:00:00Z",
+  "clientTag": "acme-corp",
+  "requiresApproval": true
 }
 
-GET  /api/posts                 -> full post history + per-platform results
+GET  /api/posts?clientTag=acme-corp         -> history, optional tag filter
+GET  /api/posts/pending                     -> drafts awaiting approval
+POST /api/posts/:id/approve                 -> publish/schedule a pending draft
+POST /api/posts/:id/reject                  -> discard a pending draft
+GET  /api/posts/:id/stats                   -> live views/likes/comments/shares
 
-GET  /api/posts/:id/stats       -> fetches live views/likes/comments/shares for a
-                                    post from each platform it was published to.
-                                    Result is also cached on the post record as
-                                    `lastStats` so history keeps a value even if
-                                    a later fetch fails.
+GET  /api/posts/:id/comments                -> comments per platform for this post
+POST /api/posts/:id/comments/:accountId/:commentId/draft-reply   { commentText }
+POST /api/posts/:id/comments/:accountId/:commentId/reply         { text }
+
+POST /api/captions/generate                 { topic, platforms: [...] }
+
+GET  /api/analytics/summary?days=7          -> totals, top posts, best posting hours
+POST /api/analytics/followers/refresh       -> snapshot current follower counts
+GET  /api/analytics/followers/:accountId    -> follower history for one account
 ```
 
-### What stats are actually available per platform
-
-| Platform  | Views | Likes | Comments | Shares | Notes |
-|-----------|:-----:|:-----:|:--------:|:------:|-------|
-| X         | ✅ | ✅ | ✅ | ✅ (retweets+quotes) | Full public metrics |
-| Instagram | ✅ (plays/reach) | ✅ | ✅ | — | Needs `instagram_manage_insights` |
-| Facebook  | ✅ (impressions) | ✅ | ✅ | ✅ | Needs `read_insights` |
-| LinkedIn  | ❌ | ✅ | ✅ | — | View counts only exist for Company Page posts, not personal profile posts |
-| TikTok    | ✅ | ✅ | ✅ | ✅ | Only works once your app clears TikTok's review |
-
-If you want to trigger posts from n8n, point an HTTP Request node at
-`POST http://<this-app-host>:3300/api/posts` with the body above — that's the entire
-integration, no further coupling.
+If you want to trigger posts from n8n, point an HTTP Request node at `POST /api/posts`
+with the body above, or subscribe to `WEBHOOK_URL` to get notified when posts go out.
 
 ## Architecture
 
 - `src/adapters/*` — one file per platform, all implementing the same interface
-  (`getAuthUrl`, `handleCallback`, `publish`, `refreshTokenIfNeeded`). Adding a new
-  platform = one new adapter file registered in `adapters/index.js`.
+  (`getAuthUrl`, `handleCallback`, `publish`, `refreshTokenIfNeeded`, `getPostStats`,
+  `getFollowerCount`, `listComments`, `replyToComment`). Adding a new platform = one
+  new adapter file registered in `adapters/index.js`.
+- `src/ai.js` — OpenRouter wrapper for caption + reply drafting. Nothing in here posts
+  anything; it only returns text for a human to review.
 - `src/db/store.js` — flat JSON file storage (`data.json`). Zero setup. Swap for
   Postgres later if you outgrow it.
 - `src/scheduler.js` — cron job checking every minute for due scheduled posts.
@@ -94,11 +137,6 @@ integration, no further coupling.
 git clone <your repo> social-poster && cd social-poster
 npm install --production
 cp .env.example .env   # fill in real values + real domain redirect URIs
-```
-
-Run with pm2 (or systemd, or Docker — whatever you're already using):
-
-```bash
 npm install -g pm2
 pm2 start src/server.js --name social-poster
 pm2 save
@@ -110,10 +148,12 @@ redirect URIs must be HTTPS in production for every platform except local testin
 ## Known limits
 
 - **X free tier**: ~500 posts/month.
-- **TikTok**: public posting (and its stats) requires app review; sandbox-only until approved.
-- **Instagram**: `publish()` needs a public media URL — you can't upload a raw file
-  directly, so host the image/video somewhere first (any public URL works).
+- **TikTok**: public posting requires app review; sandbox-only until approved. Comment
+  access requires additional API tier beyond standard posting.
+- **Instagram**: `publish()` needs a public media URL — host the image/video somewhere
+  first (any public URL works).
 - **Facebook Page tokens**: effectively long-lived but tied to the user token that
   created them — if app access is revoked on Facebook's side, reconnect.
-- **LinkedIn**: no view/impression counts for personal profile posts — that data only
-  exists for Company Page posts via a separate, more restricted API scope.
+- **LinkedIn**: no view/impression counts or follower counts for personal profile
+  posts — that data only exists for Company Page posts via a separate, more
+  restricted API scope.
