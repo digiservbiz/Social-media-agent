@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Social Poster</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, Segoe UI, sans-serif; background: #16181c; color: #e6e6e6; margin: 0; padding: 24px; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .sub { color: #888; font-size: 13px; margin-bottom: 24px; }
+  .card { background: #1f2228; border: 1px solid #2c2f36; border-radius: 10px; padding: 18px; margin-bottom: 18px; }
+  .platforms { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .pill { padding: 6px 12px; border-radius: 20px; border: 1px solid #4a90d9; color: #4a90d9; font-size: 13px; cursor: pointer; background: transparent; }
+  .pill.connected { background: #4a90d9; color: #16181c; font-weight: 600; }
+  textarea, input { width: 100%; background: #16181c; border: 1px solid #2c2f36; color: #e6e6e6; border-radius: 8px; padding: 10px; font-size: 14px; margin-bottom: 10px; }
+  textarea { min-height: 90px; resize: vertical; }
+  .checks { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; font-size: 13px; }
+  button.primary { background: #4a90d9; color: #16181c; border: none; padding: 10px 18px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+  .post-log { font-size: 13px; border-top: 1px solid #2c2f36; padding-top: 8px; margin-top: 8px; }
+  .post-log div { padding: 6px 0; border-bottom: 1px solid #24272d; }
+  .status-published { color: #7bc47f; }
+  .status-scheduled { color: #d9b04a; }
+  .status-partial_failure, .status-failed { color: #d9776a; }
+</style>
+</head>
+<body>
+  <h1>Social Poster</h1>
+  <div class="sub">Self-hosted — post to your own connected accounts, no third-party posting service.</div>
+
+  <div class="card">
+    <strong>Connect accounts</strong>
+    <div class="platforms" id="platformPills"></div>
+  </div>
+
+  <div class="card">
+    <strong>Compose</strong>
+    <textarea id="text" placeholder="What do you want to post?"></textarea>
+    <input id="link" placeholder="Optional link (Facebook/LinkedIn)">
+    <input id="mediaUrl" placeholder="Optional media URL (Instagram/TikTok require this)">
+    <div class="checks" id="accountChecks"></div>
+    <input id="scheduledFor" type="datetime-local" style="max-width: 260px; display:inline-block;">
+    <button class="primary" onclick="submitPost()">Post / Schedule</button>
+  </div>
+
+  <div class="card">
+    <strong>History</strong>
+    <div class="post-log" id="postLog"></div>
+  </div>
+
+<script>
+const PLATFORMS = ['linkedin', 'facebook', 'instagram', 'x', 'tiktok'];
+
+async function loadAccounts() {
+  const res = await fetch('/api/accounts');
+  const accounts = await res.json();
+
+  const pills = document.getElementById('platformPills');
+  pills.innerHTML = PLATFORMS.map(p => {
+    const acc = accounts.find(a => a.platform === p);
+    return `<button class="pill ${acc ? 'connected' : ''}" onclick="${acc ? `disconnect('${acc.id}')` : `connect('${p}')`}">
+      ${p}${acc ? ' ✓ ' + acc.displayName : ''}
+    </button>`;
+  }).join('');
+
+  const checks = document.getElementById('accountChecks');
+  checks.innerHTML = accounts.map(a =>
+    `<label><input type="checkbox" value="${a.id}" class="acctCheck"> ${a.platform} (${a.displayName})</label>`
+  ).join('') || '<span style="color:#888">Connect an account above first.</span>';
+}
+
+function connect(platform) { window.open(`/auth/${platform}/connect`, '_blank'); }
+async function disconnect(id) {
+  if (!confirm('Disconnect this account?')) return;
+  await fetch(`/api/accounts/${id}`, { method: 'DELETE' });
+  loadAccounts();
+}
+
+async function submitPost() {
+  const text = document.getElementById('text').value.trim();
+  const link = document.getElementById('link').value.trim();
+  const mediaUrl = document.getElementById('mediaUrl').value.trim();
+  const scheduledFor = document.getElementById('scheduledFor').value;
+  const accountIds = [...document.querySelectorAll('.acctCheck:checked')].map(c => c.value);
+
+  if (!text || !accountIds.length) { alert('Write something and pick at least one account.'); return; }
+
+  const body = {
+    text, accountIds,
+    link: link || undefined,
+    mediaUrls: mediaUrl ? [mediaUrl] : [],
+    scheduledFor: scheduledFor ? new Date(scheduledFor).toISOString() : undefined
+  };
+
+  const res = await fetch('/api/posts', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const data = await res.json();
+  if (!data.success) { alert('Error: ' + data.error); return; }
+  document.getElementById('text').value = '';
+  loadHistory();
+}
+
+async function loadHistory() {
+  const res = await fetch('/api/posts');
+  const posts = await res.json();
+  document.getElementById('postLog').innerHTML = posts.map(p => `
+    <div>
+      <span class="status-${p.status}">●</span>
+      <strong>${p.status}</strong> — ${p.text.slice(0,60)}${p.text.length>60?'…':''}
+      ${p.scheduledFor ? `<br><small>Scheduled: ${new Date(p.scheduledFor).toLocaleString()}</small>` : ''}
+      ${p.results?.length ? `<br><small>${p.results.map(r => `${r.platform}: ${r.success ? 'ok' : 'FAILED - ' + r.error}`).join(' | ')}</small>` : ''}
+    </div>
+  `).join('') || '<span style="color:#888">No posts yet.</span>';
+}
+
+loadAccounts();
+loadHistory();
+setInterval(loadHistory, 15000);
+</script>
+</body>
+</html>
