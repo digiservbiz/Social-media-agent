@@ -1,7 +1,8 @@
 # Social Poster
 
 Self-hosted app that posts to LinkedIn, Facebook, Instagram, X, and TikTok from one
-dashboard or one API call. Standalone — no dependency on any other workflow.
+dashboard or one API call, and pulls back engagement stats (views, likes, comments,
+shares) per post. Standalone — no dependency on any other workflow.
 
 ## Setup
 
@@ -32,6 +33,8 @@ npm run dev       # auto-restart on file changes
 
 Open `http://localhost:3300`. Click a platform pill to connect it, write a post, pick
 which connected accounts to send it to, optionally set a schedule time, hit Post.
+Every published post in the History section gets a "Refresh stats" button that pulls
+live views/likes/comments/shares from that platform.
 
 ## API
 
@@ -53,7 +56,23 @@ Content-Type: application/json
 }
 
 GET  /api/posts                 -> full post history + per-platform results
+
+GET  /api/posts/:id/stats       -> fetches live views/likes/comments/shares for a
+                                    post from each platform it was published to.
+                                    Result is also cached on the post record as
+                                    `lastStats` so history keeps a value even if
+                                    a later fetch fails.
 ```
+
+### What stats are actually available per platform
+
+| Platform  | Views | Likes | Comments | Shares | Notes |
+|-----------|:-----:|:-----:|:--------:|:------:|-------|
+| X         | ✅ | ✅ | ✅ | ✅ (retweets+quotes) | Full public metrics |
+| Instagram | ✅ (plays/reach) | ✅ | ✅ | — | Needs `instagram_manage_insights` |
+| Facebook  | ✅ (impressions) | ✅ | ✅ | ✅ | Needs `read_insights` |
+| LinkedIn  | ❌ | ✅ | ✅ | — | View counts only exist for Company Page posts, not personal profile posts |
+| TikTok    | ✅ | ✅ | ✅ | ✅ | Only works once your app clears TikTok's review |
 
 If you want to trigger posts from n8n, point an HTTP Request node at
 `POST http://<this-app-host>:3300/api/posts` with the body above — that's the entire
@@ -90,9 +109,11 @@ redirect URIs must be HTTPS in production for every platform except local testin
 
 ## Known limits
 
-- **X free tier**: ~500 posts/month, no analytics endpoints.
-- **TikTok**: public posting requires app review; sandbox-only until approved.
+- **X free tier**: ~500 posts/month.
+- **TikTok**: public posting (and its stats) requires app review; sandbox-only until approved.
 - **Instagram**: `publish()` needs a public media URL — you can't upload a raw file
   directly, so host the image/video somewhere first (any public URL works).
 - **Facebook Page tokens**: effectively long-lived but tied to the user token that
   created them — if app access is revoked on Facebook's side, reconnect.
+- **LinkedIn**: no view/impression counts for personal profile posts — that data only
+  exists for Company Page posts via a separate, more restricted API scope.
