@@ -76,19 +76,48 @@ class LinkedInAdapter extends BaseAdapter {
   }
 
   // LinkedIn's public metrics for a personal post are limited: likes + first-level
-  // comment counts via socialActions. Impressions/views require org-page access
-  // (r_organization_social), which most personal-profile tokens won't have.
+  // comment counts via socialActions. Impressions/views require org-page access.
   async getPostStats(account, remotePostId) {
     const urn = encodeURIComponent(remotePostId);
     const res = await axios.get(`${API_BASE}/socialActions/${urn}`, {
       headers: { Authorization: `Bearer ${account.accessToken}` }
     });
     return {
-      views: null, // not available without organization scope
+      views: null,
       likes: res.data.likesSummary?.totalLikes ?? null,
       comments: res.data.commentsSummary?.totalFirstLevelComments ?? null,
       shares: null
     };
+  }
+
+  // LinkedIn doesn't expose personal profile connection/follower counts via the
+  // standard API — this only works for Organization pages with the right scope.
+  async getFollowerCount() {
+    return null;
+  }
+
+  async listComments(account, remotePostId) {
+    const urn = encodeURIComponent(remotePostId);
+    const res = await axios.get(`${API_BASE}/socialActions/${urn}/comments`, {
+      headers: { Authorization: `Bearer ${account.accessToken}` }
+    });
+    return (res.data.elements || []).map(c => ({
+      id: c.id,
+      text: c.message?.text || '',
+      authorName: c.actor,
+      createdAt: new Date(c.created?.time || Date.now()).toISOString()
+    }));
+  }
+
+  async replyToComment(account, remotePostId, commentText) {
+    const urn = encodeURIComponent(remotePostId);
+    const res = await axios.post(`${API_BASE}/socialActions/${urn}/comments`, {
+      actor: `urn:li:person:${account.platformUserId}`,
+      message: { text: commentText }
+    }, {
+      headers: { Authorization: `Bearer ${account.accessToken}`, 'Content-Type': 'application/json' }
+    });
+    return { success: true, remoteCommentId: res.data.id };
   }
 }
 

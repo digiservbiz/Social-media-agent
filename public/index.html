@@ -5,29 +5,48 @@
 <title>Social Poster</title>
 <style>
   * { box-sizing: border-box; }
-  body { font-family: -apple-system, Segoe UI, sans-serif; background: #16181c; color: #e6e6e6; margin: 0; padding: 24px; }
+  body { font-family: -apple-system, Segoe UI, sans-serif; background: #16181c; color: #e6e6e6; margin: 0; padding: 24px; max-width: 900px; }
   h1 { font-size: 22px; margin-bottom: 4px; }
   .sub { color: #888; font-size: 13px; margin-bottom: 24px; }
   .card { background: #1f2228; border: 1px solid #2c2f36; border-radius: 10px; padding: 18px; margin-bottom: 18px; }
+  .card > strong { display: block; margin-bottom: 10px; }
   .platforms { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
   .pill { padding: 6px 12px; border-radius: 20px; border: 1px solid #4a90d9; color: #4a90d9; font-size: 13px; cursor: pointer; background: transparent; }
   .pill.connected { background: #4a90d9; color: #16181c; font-weight: 600; }
-  textarea, input { width: 100%; background: #16181c; border: 1px solid #2c2f36; color: #e6e6e6; border-radius: 8px; padding: 10px; font-size: 14px; margin-bottom: 10px; }
+  textarea, input, select { width: 100%; background: #16181c; border: 1px solid #2c2f36; color: #e6e6e6; border-radius: 8px; padding: 10px; font-size: 14px; margin-bottom: 10px; }
   textarea { min-height: 90px; resize: vertical; }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; }
   .checks { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; font-size: 13px; }
+  .checks label { display: flex; align-items: center; gap: 4px; }
   button.primary { background: #4a90d9; color: #16181c; border: none; padding: 10px 18px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+  button.secondary { background: transparent; border: 1px solid #4a90d9; color: #4a90d9; padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+  button.small { padding: 4px 10px; font-size: 11px; border-radius: 6px; }
+  button.danger { border-color: #d9776a; color: #d9776a; }
+  .inline-check { display: flex; align-items: center; gap: 6px; font-size: 13px; margin-bottom: 10px; }
+  .inline-check input { width: auto; margin: 0; }
   .post-log { font-size: 13px; border-top: 1px solid #2c2f36; padding-top: 8px; margin-top: 8px; }
-  .post-log div { padding: 6px 0; border-bottom: 1px solid #24272d; }
+  .post-log > div { padding: 8px 0; border-bottom: 1px solid #24272d; }
   .status-published { color: #7bc47f; }
-  .status-scheduled { color: #d9b04a; }
-  .status-partial_failure, .status-failed { color: #d9776a; }
+  .status-scheduled, .status-pending_approval { color: #d9b04a; }
+  .status-partial_failure, .status-failed, .status-rejected { color: #d9776a; }
   .stats-row { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
   .stats-block { background: #16181c; border: 1px solid #2c2f36; border-radius: 8px; padding: 8px 12px; font-size: 12px; min-width: 140px; }
   .stats-block .platform { color: #4a90d9; font-weight: 600; text-transform: capitalize; margin-bottom: 4px; }
   .stats-block .metric { color: #ccc; }
   .stats-block .metric b { color: #fff; }
-  .refresh-btn { background: transparent; border: 1px solid #4a90d9; color: #4a90d9; border-radius: 6px; padding: 3px 10px; font-size: 11px; cursor: pointer; margin-left: 8px; }
+  .refresh-btn { background: transparent; border: 1px solid #4a90d9; color: #4a90d9; border-radius: 6px; padding: 3px 10px; font-size: 11px; cursor: pointer; margin-left: 8px; margin-top: 6px; }
   .stats-error { color: #d9776a; font-style: italic; }
+  .tag { display: inline-block; background: #2c2f36; color: #aaa; border-radius: 4px; padding: 1px 8px; font-size: 11px; margin-left: 6px; }
+  .comment-item { background: #16181c; border: 1px solid #2c2f36; border-radius: 8px; padding: 8px 10px; margin-top: 6px; font-size: 12px; }
+  .comment-item .author { color: #4a90d9; font-weight: 600; }
+  .comment-item textarea { min-height: 44px; font-size: 12px; margin-top: 6px; margin-bottom: 4px; }
+  .approval-card { background: #16181c; border: 1px solid #d9b04a; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; font-size: 13px; }
+  .analytics-grid { display: flex; gap: 14px; flex-wrap: wrap; }
+  .analytics-block { background: #16181c; border: 1px solid #2c2f36; border-radius: 8px; padding: 10px 14px; font-size: 12px; min-width: 150px; }
+  .analytics-block .platform { color: #4a90d9; font-weight: 600; text-transform: capitalize; margin-bottom: 4px; }
+  .top-post { font-size: 12px; padding: 6px 0; border-bottom: 1px solid #24272d; }
+  .muted { color: #888; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -37,42 +56,90 @@
   <div class="card">
     <strong>Connect accounts</strong>
     <div class="platforms" id="platformPills"></div>
+    <div id="accountTags"></div>
+  </div>
+
+  <div class="card">
+    <strong>AI caption assist</strong>
+    <div class="row">
+      <input id="captionTopic" placeholder="Topic, e.g. 'launching our new pricing page'">
+      <button class="secondary" onclick="generateCaptions()" style="flex:0 0 auto;">Generate</button>
+    </div>
+    <div class="muted">Drafts a caption per selected platform below — you can edit before posting. Requires OPENROUTER_API_KEY in .env.</div>
   </div>
 
   <div class="card">
     <strong>Compose</strong>
-    <textarea id="text" placeholder="What do you want to post?"></textarea>
-    <input id="link" placeholder="Optional link (Facebook/LinkedIn)">
-    <input id="mediaUrl" placeholder="Optional media URL (Instagram/TikTok require this)">
+    <textarea id="text" placeholder="What do you want to post? (used as fallback if no platform-specific version is generated)"></textarea>
+    <div class="row">
+      <input id="link" placeholder="Optional link (Facebook/LinkedIn)">
+      <input id="mediaUrl" placeholder="Optional media URL(s), comma-separated for carousel">
+    </div>
     <div class="checks" id="accountChecks"></div>
-    <input id="scheduledFor" type="datetime-local" style="max-width: 260px; display:inline-block;">
+    <div id="platformTextBox"></div>
+    <div class="row">
+      <input id="clientTag" placeholder="Client tag (optional, for filtering)">
+      <input id="scheduledFor" type="datetime-local">
+    </div>
+    <label class="inline-check"><input type="checkbox" id="requiresApproval"> Require approval before publishing</label>
     <button class="primary" onclick="submitPost()">Post / Schedule</button>
   </div>
 
   <div class="card">
+    <strong>Pending approval</strong>
+    <div id="pendingList"><span class="muted">Nothing waiting on review.</span></div>
+  </div>
+
+  <div class="card">
+    <strong>Analytics</strong>
+    <div class="row" style="margin-bottom:10px;">
+      <button class="secondary" onclick="loadAnalytics()">Refresh summary (7 days)</button>
+      <button class="secondary" onclick="refreshFollowers()">Refresh follower counts</button>
+    </div>
+    <div id="analyticsBody"><span class="muted">Click refresh to load.</span></div>
+  </div>
+
+  <div class="card">
     <strong>History</strong>
+    <div class="row" style="margin-bottom:10px;">
+      <input id="filterTag" placeholder="Filter by client tag" oninput="loadHistory()">
+    </div>
     <div class="post-log" id="postLog"></div>
   </div>
 
 <script>
 const PLATFORMS = ['linkedin', 'facebook', 'instagram', 'x', 'tiktok'];
+let currentAccounts = [];
 
 async function loadAccounts() {
   const res = await fetch('/api/accounts');
-  const accounts = await res.json();
+  currentAccounts = await res.json();
 
   const pills = document.getElementById('platformPills');
   pills.innerHTML = PLATFORMS.map(p => {
-    const acc = accounts.find(a => a.platform === p);
+    const acc = currentAccounts.find(a => a.platform === p);
     return `<button class="pill ${acc ? 'connected' : ''}" onclick="${acc ? `disconnect('${acc.id}')` : `connect('${p}')`}">
       ${p}${acc ? ' ✓ ' + acc.displayName : ''}
     </button>`;
   }).join('');
 
   const checks = document.getElementById('accountChecks');
-  checks.innerHTML = accounts.map(a =>
-    `<label><input type="checkbox" value="${a.id}" class="acctCheck"> ${a.platform} (${a.displayName})</label>`
-  ).join('') || '<span style="color:#888">Connect an account above first.</span>';
+  checks.innerHTML = currentAccounts.map(a =>
+    `<label><input type="checkbox" value="${a.id}" data-platform="${a.platform}" class="acctCheck" onchange="renderPlatformTextBoxes()"> ${a.platform} (${a.displayName})${a.clientTag ? `<span class="tag">${a.clientTag}</span>` : ''}</label>`
+  ).join('') || '<span class="muted">Connect an account above first.</span>';
+
+  const tagsBox = document.getElementById('accountTags');
+  tagsBox.innerHTML = currentAccounts.map(a => `
+    <div style="font-size:12px; margin-top:6px;">
+      ${a.platform} (${a.displayName}):
+      <input style="width:140px; display:inline-block; padding:3px 6px; margin:0 6px;" value="${a.clientTag || ''}" placeholder="client tag" onchange="setClientTag('${a.id}', this.value)">
+    </div>
+  `).join('');
+}
+
+async function setClientTag(accountId, clientTag) {
+  await fetch(`/api/accounts/${accountId}`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ clientTag }) });
+  loadAccounts();
 }
 
 function connect(platform) { window.open(`/auth/${platform}/connect`, '_blank'); }
@@ -82,27 +149,73 @@ async function disconnect(id) {
   loadAccounts();
 }
 
+function renderPlatformTextBoxes() {
+  const checked = [...document.querySelectorAll('.acctCheck:checked')];
+  const platforms = [...new Set(checked.map(c => c.dataset.platform))];
+  const box = document.getElementById('platformTextBox');
+  const existing = {};
+  box.querySelectorAll('textarea[data-platform]').forEach(t => existing[t.dataset.platform] = t.value);
+
+  box.innerHTML = platforms.map(p => `
+    <div style="margin-bottom:6px;">
+      <label class="muted">${p}-specific text (optional override)</label>
+      <textarea data-platform="${p}" style="min-height:50px;" placeholder="Leave blank to use the main text above">${existing[p] || ''}</textarea>
+    </div>
+  `).join('');
+}
+
+async function generateCaptions() {
+  const topic = document.getElementById('captionTopic').value.trim();
+  const checked = [...document.querySelectorAll('.acctCheck:checked')];
+  const platforms = [...new Set(checked.map(c => c.dataset.platform))];
+  if (!topic) { alert('Enter a topic first.'); return; }
+  if (!platforms.length) { alert('Select at least one account below so I know which platforms to draft for.'); return; }
+
+  const res = await fetch('/api/captions/generate', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ topic, platforms }) });
+  const data = await res.json();
+  if (!data.success) { alert('Error: ' + data.error); return; }
+
+  renderPlatformTextBoxes();
+  for (const [platform, caption] of Object.entries(data.captions)) {
+    if (platform.endsWith('_error')) continue;
+    const ta = document.querySelector(`#platformTextBox textarea[data-platform="${platform}"]`);
+    if (ta && caption) ta.value = caption;
+    if (data.captions[`${platform}_error`]) alert(`${platform}: ${data.captions[`${platform}_error`]}`);
+  }
+}
+
 async function submitPost() {
   const text = document.getElementById('text').value.trim();
   const link = document.getElementById('link').value.trim();
-  const mediaUrl = document.getElementById('mediaUrl').value.trim();
+  const mediaUrlRaw = document.getElementById('mediaUrl').value.trim();
   const scheduledFor = document.getElementById('scheduledFor').value;
+  const clientTag = document.getElementById('clientTag').value.trim();
+  const requiresApproval = document.getElementById('requiresApproval').checked;
   const accountIds = [...document.querySelectorAll('.acctCheck:checked')].map(c => c.value);
+
+  const platformText = {};
+  document.querySelectorAll('#platformTextBox textarea[data-platform]').forEach(t => {
+    if (t.value.trim()) platformText[t.dataset.platform] = t.value.trim();
+  });
 
   if (!text || !accountIds.length) { alert('Write something and pick at least one account.'); return; }
 
   const body = {
-    text, accountIds,
+    text, accountIds, platformText,
     link: link || undefined,
-    mediaUrls: mediaUrl ? [mediaUrl] : [],
-    scheduledFor: scheduledFor ? new Date(scheduledFor).toISOString() : undefined
+    mediaUrls: mediaUrlRaw ? mediaUrlRaw.split(',').map(s => s.trim()).filter(Boolean) : [],
+    scheduledFor: scheduledFor ? new Date(scheduledFor).toISOString() : undefined,
+    clientTag: clientTag || undefined,
+    requiresApproval: requiresApproval || undefined
   };
 
   const res = await fetch('/api/posts', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
   const data = await res.json();
   if (!data.success) { alert('Error: ' + data.error); return; }
   document.getElementById('text').value = '';
+  document.getElementById('platformTextBox').innerHTML = '';
   loadHistory();
+  loadPending();
 }
 
 function metricBadge(v) { return (v === null || v === undefined) ? '—' : v.toLocaleString(); }
@@ -125,36 +238,154 @@ function renderStatsBlocks(stats) {
 
 async function refreshStats(postId) {
   const container = document.getElementById(`stats-${postId}`);
-  container.innerHTML = '<span style="color:#888">Loading…</span>';
+  container.innerHTML = '<span class="muted">Loading…</span>';
   try {
     const res = await fetch(`/api/posts/${postId}/stats`);
     const data = await res.json();
-    container.innerHTML = renderStatsBlocks(data.stats) || '<span style="color:#888">No stats available.</span>';
+    container.innerHTML = renderStatsBlocks(data.stats) || '<span class="muted">No stats available.</span>';
   } catch (err) {
     container.innerHTML = '<span class="stats-error">Failed to load stats.</span>';
   }
 }
 
+async function toggleComments(postId) {
+  const panel = document.getElementById(`comments-${postId}`);
+  if (panel.dataset.loaded === 'true') {
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    return;
+  }
+  panel.style.display = 'block';
+  panel.innerHTML = '<span class="muted">Loading comments…</span>';
+  const res = await fetch(`/api/posts/${postId}/comments`);
+  const data = await res.json();
+  panel.dataset.loaded = 'true';
+
+  panel.innerHTML = data.byPlatform.map(pf => {
+    if (pf.error) return `<div class="comment-item"><span class="platform" style="color:#4a90d9;">${pf.platform}</span>: <span class="stats-error">${pf.error}</span></div>`;
+    if (!pf.comments.length) return `<div class="comment-item muted">${pf.platform}: no comments yet.</div>`;
+    return pf.comments.map(c => `
+      <div class="comment-item">
+        <span class="author">${c.authorName}</span> (${pf.platform}): ${c.text}
+        <div id="reply-area-${postId}-${c.id}">
+          <button class="secondary small" onclick="draftReply('${postId}','${pf.accountId}','${c.id}', ${JSON.stringify(c.text).replace(/"/g,'&quot;')})">AI draft reply</button>
+        </div>
+      </div>
+    `).join('');
+  }).join('') || '<span class="muted">No comments found.</span>';
+}
+
+async function draftReply(postId, accountId, commentId, commentText) {
+  const area = document.getElementById(`reply-area-${postId}-${commentId}`);
+  area.innerHTML = '<span class="muted">Drafting…</span>';
+  const res = await fetch(`/api/posts/${postId}/comments/${accountId}/${commentId}/draft-reply`, {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ commentText })
+  });
+  const data = await res.json();
+  if (!data.success) { area.innerHTML = `<span class="stats-error">${data.error}</span>`; return; }
+  area.innerHTML = `
+    <textarea id="replytext-${postId}-${commentId}">${data.draft}</textarea>
+    <button class="primary small" onclick="sendReply('${postId}','${accountId}','${commentId}')">Send reply</button>
+  `;
+}
+
+async function sendReply(postId, accountId, commentId) {
+  const text = document.getElementById(`replytext-${postId}-${commentId}`).value;
+  const res = await fetch(`/api/posts/${postId}/comments/${accountId}/${commentId}/reply`, {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ text })
+  });
+  const data = await res.json();
+  const area = document.getElementById(`reply-area-${postId}-${commentId}`);
+  area.innerHTML = data.success ? '<span style="color:#7bc47f;">Reply sent ✓</span>' : `<span class="stats-error">${data.error}</span>`;
+}
+
 async function loadHistory() {
-  const res = await fetch('/api/posts');
+  const tag = document.getElementById('filterTag').value.trim();
+  const res = await fetch(`/api/posts${tag ? '?clientTag=' + encodeURIComponent(tag) : ''}`);
   const posts = await res.json();
   document.getElementById('postLog').innerHTML = posts.map(p => `
     <div>
       <span class="status-${p.status}">●</span>
       <strong>${p.status}</strong> — ${p.text.slice(0,60)}${p.text.length>60?'…':''}
+      ${p.clientTag ? `<span class="tag">${p.clientTag}</span>` : ''}
       ${p.scheduledFor ? `<br><small>Scheduled: ${new Date(p.scheduledFor).toLocaleString()}</small>` : ''}
       ${p.results?.length ? `<br><small>${p.results.map(r => `${r.platform}: ${r.success ? 'ok' : 'FAILED - ' + r.error}`).join(' | ')}</small>` : ''}
       ${p.results?.some(r => r.success) ? `
         <button class="refresh-btn" onclick="refreshStats('${p.id}')">Refresh stats</button>
-        <div id="stats-${p.id}">${renderStatsBlocks(p.lastStats) || '<span style="color:#888;font-size:12px;">No stats fetched yet.</span>'}</div>
+        <button class="refresh-btn" onclick="toggleComments('${p.id}')">View / reply to comments</button>
+        <div id="stats-${p.id}">${renderStatsBlocks(p.lastStats) || '<span class="muted" style="font-size:12px;">No stats fetched yet.</span>'}</div>
+        <div id="comments-${p.id}" style="display:none; margin-top:6px;"></div>
       ` : ''}
     </div>
-  `).join('') || '<span style="color:#888">No posts yet.</span>';
+  `).join('') || '<span class="muted">No posts yet.</span>';
+}
+
+async function loadPending() {
+  const res = await fetch('/api/posts/pending');
+  const posts = await res.json();
+  document.getElementById('pendingList').innerHTML = posts.map(p => `
+    <div class="approval-card">
+      ${p.text}
+      ${p.clientTag ? `<span class="tag">${p.clientTag}</span>` : ''}
+      <div style="margin-top:6px;">
+        <button class="primary small" onclick="approvePost('${p.id}')">Approve & publish</button>
+        <button class="secondary small danger" onclick="rejectPost('${p.id}')">Reject</button>
+      </div>
+    </div>
+  `).join('') || '<span class="muted">Nothing waiting on review.</span>';
+}
+
+async function approvePost(id) {
+  await fetch(`/api/posts/${id}/approve`, { method: 'POST' });
+  loadPending(); loadHistory();
+}
+async function rejectPost(id) {
+  await fetch(`/api/posts/${id}/reject`, { method: 'POST' });
+  loadPending(); loadHistory();
+}
+
+async function loadAnalytics() {
+  const box = document.getElementById('analyticsBody');
+  box.innerHTML = '<span class="muted">Loading…</span>';
+  const res = await fetch('/api/analytics/summary?days=7');
+  const data = await res.json();
+
+  const totalsHtml = `<div class="analytics-grid">${Object.entries(data.totalsByPlatform).map(([platform, t]) => `
+    <div class="analytics-block">
+      <div class="platform">${platform}</div>
+      <div>👁 ${metricBadge(t.views)} · 👍 ${metricBadge(t.likes)}</div>
+      <div>💬 ${metricBadge(t.comments)} · 🔁 ${metricBadge(t.shares)}</div>
+    </div>
+  `).join('') || '<span class="muted">No stats collected yet — refresh stats on some posts first.</span>'}</div>`;
+
+  const topHtml = data.topPosts.map(p => `<div class="top-post">${p.text.slice(0,70)} — score ${p.score.toFixed(1)}</div>`).join('') || '<span class="muted">No posts yet.</span>';
+
+  const hourHtml = data.bestPostingHours.length
+    ? data.bestPostingHours.map(h => `<div class="top-post">${h.hourUTC}:00 UTC — avg score ${h.avgScore.toFixed(1)} (${h.sampleSize} posts)</div>`).join('')
+    : '<span class="muted">Not enough data yet.</span>';
+
+  box.innerHTML = `
+    <div style="margin-bottom:10px;"><strong style="font-size:13px;">Totals (last ${data.windowDays} days)</strong>${totalsHtml}</div>
+    <div style="margin-bottom:10px;"><strong style="font-size:13px;">Top posts</strong>${topHtml}</div>
+    <div><strong style="font-size:13px;">Best posting hours</strong>${hourHtml}${data.note ? `<div class="muted">${data.note}</div>` : ''}</div>
+  `;
+}
+
+async function refreshFollowers() {
+  const res = await fetch('/api/analytics/followers/refresh', { method: 'POST' });
+  const data = await res.json();
+  const lines = data.results.map(r => r.error
+    ? `${r.platform}: <span class="stats-error">${r.error}</span>`
+    : `${r.platform}: ${r.followerCount === null ? 'not supported for this platform' : r.followerCount.toLocaleString() + ' followers'}`
+  ).join('<br>');
+  alert('Follower counts refreshed — see console/analytics panel.');
+  document.getElementById('analyticsBody').insertAdjacentHTML('afterbegin', `<div class="muted" style="margin-bottom:8px;">${lines}</div>`);
 }
 
 loadAccounts();
 loadHistory();
+loadPending();
 setInterval(loadHistory, 15000);
+setInterval(loadPending, 15000);
 </script>
 </body>
 </html>

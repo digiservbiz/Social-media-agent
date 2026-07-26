@@ -9,6 +9,16 @@ router.get('/', (req, res) => {
   res.json(accounts);
 });
 
+// PATCH /api/accounts/:id -> set a client tag / display label for multi-client use
+router.patch('/:id', (req, res) => {
+  const account = store.getAccount(req.params.id);
+  if (!account) return res.status(404).json({ error: 'Account not found' });
+  const { clientTag } = req.body;
+  const updated = store.upsertAccount({ ...account, clientTag: clientTag ?? account.clientTag ?? null });
+  const { accessToken, refreshToken, ...safe } = updated;
+  res.json(safe);
+});
+
 // DELETE /api/accounts/:id -> disconnect an account
 router.delete('/:id', (req, res) => {
   store.deleteAccount(req.params.id);

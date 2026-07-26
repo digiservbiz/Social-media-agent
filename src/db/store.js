@@ -1,5 +1,4 @@
 // Minimal file-based JSON store. No native deps — runs anywhere Node runs.
-// Swap this out for Postgres later if you outgrow it; the interface is tiny.
 const fs = require('fs');
 const path = require('path');
 
@@ -7,11 +6,13 @@ const DB_PATH = path.join(__dirname, '..', '..', 'data.json');
 
 function load() {
   if (!fs.existsSync(DB_PATH)) {
-    const initial = { accounts: [], posts: [], oauthState: {} };
+    const initial = { accounts: [], posts: [], oauthState: {}, followerHistory: [] };
     fs.writeFileSync(DB_PATH, JSON.stringify(initial, null, 2));
     return initial;
   }
-  return JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
+  const data = JSON.parse(fs.readFileSync(DB_PATH, 'utf-8'));
+  if (!data.followerHistory) data.followerHistory = [];
+  return data;
 }
 
 function save(data) {
@@ -19,16 +20,9 @@ function save(data) {
 }
 
 module.exports = {
-  // Connected social accounts (tokens live here)
-  getAccounts() {
-    return load().accounts;
-  },
-  getAccount(id) {
-    return load().accounts.find(a => a.id === id);
-  },
-  getAccountsByPlatform(platform) {
-    return load().accounts.filter(a => a.platform === platform);
-  },
+  getAccounts() { return load().accounts; },
+  getAccount(id) { return load().accounts.find(a => a.id === id); },
+  getAccountsByPlatform(platform) { return load().accounts.filter(a => a.platform === platform); },
   upsertAccount(account) {
     const data = load();
     const idx = data.accounts.findIndex(a => a.id === account.id);
@@ -43,16 +37,12 @@ module.exports = {
     save(data);
   },
 
-  // Posts (immediate + scheduled)
-  getPosts() {
-    return load().posts;
-  },
-  getPost(id) {
-    return load().posts.find(p => p.id === id);
-  },
+  getPosts() { return load().posts; },
+  getPost(id) { return load().posts.find(p => p.id === id); },
   getDuePosts(nowIso) {
     return load().posts.filter(p => p.status === 'scheduled' && p.scheduledFor <= nowIso);
   },
+  getPendingApproval() { return load().posts.filter(p => p.status === 'pending_approval'); },
   createPost(post) {
     const data = load();
     data.posts.push(post);
@@ -60,7 +50,6 @@ module.exports = {
     return post;
   },
   updatePost(id, patch) {
-    // patch may include `results` (per-account stats cache lives inside each result)
     const data = load();
     const idx = data.posts.findIndex(p => p.id === id);
     if (idx < 0) return null;
@@ -68,8 +57,22 @@ module.exports = {
     save(data);
     return data.posts[idx];
   },
+  deletePost(id) {
+    const data = load();
+    data.posts = data.posts.filter(p => p.id !== id);
+    save(data);
+  },
 
-  // Transient OAuth state (CSRF protection during auth redirects)
+  // Follower count history — one row per account per snapshot
+  addFollowerSnapshot(accountId, count) {
+    const data = load();
+    data.followerHistory.push({ accountId, count, at: new Date().toISOString() });
+    save(data);
+  },
+  getFollowerHistory(accountId) {
+    return load().followerHistory.filter(f => f.accountId === accountId).sort((a, b) => a.at < b.at ? -1 : 1);
+  },
+
   setOAuthState(key, value) {
     const data = load();
     data.oauthState[key] = value;
