@@ -65,6 +65,29 @@ class TikTokAdapter extends BaseAdapter {
     );
     return { success: true, remotePostId: res.data.data?.publish_id };
   }
+
+  // Note: remotePostId from publish() is a publish_id, not the final video_id —
+  // TikTok processes the upload asynchronously. Stats lookup here assumes the
+  // publish_id can be resolved to a video_id via the same list endpoint;
+  // in practice you may need to map publish_id -> video_id once processing
+  // completes (poll /post/publish/status/fetch/ first).
+  async getPostStats(account, remoteVideoId) {
+    const res = await axios.post(
+      `${API_BASE}/video/query/`,
+      { filters: { video_ids: [remoteVideoId] } },
+      {
+        params: { fields: 'view_count,like_count,comment_count,share_count' },
+        headers: { Authorization: `Bearer ${account.accessToken}`, 'Content-Type': 'application/json' }
+      }
+    );
+    const v = res.data.data?.videos?.[0] || {};
+    return {
+      views: v.view_count ?? null,
+      likes: v.like_count ?? null,
+      comments: v.comment_count ?? null,
+      shares: v.share_count ?? null
+    };
+  }
 }
 
 module.exports = TikTokAdapter;

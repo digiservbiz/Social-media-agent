@@ -21,6 +21,13 @@
   .status-published { color: #7bc47f; }
   .status-scheduled { color: #d9b04a; }
   .status-partial_failure, .status-failed { color: #d9776a; }
+  .stats-row { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
+  .stats-block { background: #16181c; border: 1px solid #2c2f36; border-radius: 8px; padding: 8px 12px; font-size: 12px; min-width: 140px; }
+  .stats-block .platform { color: #4a90d9; font-weight: 600; text-transform: capitalize; margin-bottom: 4px; }
+  .stats-block .metric { color: #ccc; }
+  .stats-block .metric b { color: #fff; }
+  .refresh-btn { background: transparent; border: 1px solid #4a90d9; color: #4a90d9; border-radius: 6px; padding: 3px 10px; font-size: 11px; cursor: pointer; margin-left: 8px; }
+  .stats-error { color: #d9776a; font-style: italic; }
 </style>
 </head>
 <body>
@@ -98,6 +105,36 @@ async function submitPost() {
   loadHistory();
 }
 
+function metricBadge(v) { return (v === null || v === undefined) ? '—' : v.toLocaleString(); }
+
+function renderStatsBlocks(stats) {
+  if (!stats?.length) return '';
+  return `<div class="stats-row">${stats.map(s => `
+    <div class="stats-block">
+      <div class="platform">${s.platform}</div>
+      ${s.error
+        ? `<div class="stats-error">${s.error}</div>`
+        : `<div class="metric">👁 <b>${metricBadge(s.views)}</b> views</div>
+           <div class="metric">👍 <b>${metricBadge(s.likes)}</b> likes</div>
+           <div class="metric">💬 <b>${metricBadge(s.comments)}</b> comments</div>
+           <div class="metric">🔁 <b>${metricBadge(s.shares)}</b> shares</div>`
+      }
+    </div>
+  `).join('')}</div>`;
+}
+
+async function refreshStats(postId) {
+  const container = document.getElementById(`stats-${postId}`);
+  container.innerHTML = '<span style="color:#888">Loading…</span>';
+  try {
+    const res = await fetch(`/api/posts/${postId}/stats`);
+    const data = await res.json();
+    container.innerHTML = renderStatsBlocks(data.stats) || '<span style="color:#888">No stats available.</span>';
+  } catch (err) {
+    container.innerHTML = '<span class="stats-error">Failed to load stats.</span>';
+  }
+}
+
 async function loadHistory() {
   const res = await fetch('/api/posts');
   const posts = await res.json();
@@ -107,6 +144,10 @@ async function loadHistory() {
       <strong>${p.status}</strong> — ${p.text.slice(0,60)}${p.text.length>60?'…':''}
       ${p.scheduledFor ? `<br><small>Scheduled: ${new Date(p.scheduledFor).toLocaleString()}</small>` : ''}
       ${p.results?.length ? `<br><small>${p.results.map(r => `${r.platform}: ${r.success ? 'ok' : 'FAILED - ' + r.error}`).join(' | ')}</small>` : ''}
+      ${p.results?.some(r => r.success) ? `
+        <button class="refresh-btn" onclick="refreshStats('${p.id}')">Refresh stats</button>
+        <div id="stats-${p.id}">${renderStatsBlocks(p.lastStats) || '<span style="color:#888;font-size:12px;">No stats fetched yet.</span>'}</div>
+      ` : ''}
     </div>
   `).join('') || '<span style="color:#888">No posts yet.</span>';
 }

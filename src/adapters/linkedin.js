@@ -74,6 +74,22 @@ class LinkedInAdapter extends BaseAdapter {
     const postId = res.headers['x-restli-id'] || res.data?.id;
     return { success: true, remotePostId: postId };
   }
+
+  // LinkedIn's public metrics for a personal post are limited: likes + first-level
+  // comment counts via socialActions. Impressions/views require org-page access
+  // (r_organization_social), which most personal-profile tokens won't have.
+  async getPostStats(account, remotePostId) {
+    const urn = encodeURIComponent(remotePostId);
+    const res = await axios.get(`${API_BASE}/socialActions/${urn}`, {
+      headers: { Authorization: `Bearer ${account.accessToken}` }
+    });
+    return {
+      views: null, // not available without organization scope
+      likes: res.data.likesSummary?.totalLikes ?? null,
+      comments: res.data.commentsSummary?.totalFirstLevelComments ?? null,
+      shares: null
+    };
+  }
 }
 
 module.exports = LinkedInAdapter;

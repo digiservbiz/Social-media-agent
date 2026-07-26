@@ -101,6 +101,20 @@ class XAdapter extends BaseAdapter {
     );
     return { success: true, remotePostId: res.data.data.id };
   }
+
+  async getPostStats(account, remotePostId) {
+    const res = await axios.get(`${API_BASE}/tweets/${remotePostId}`, {
+      params: { 'tweet.fields': 'public_metrics' },
+      headers: { Authorization: `Bearer ${account.accessToken}` }
+    });
+    const m = res.data.data.public_metrics || {};
+    return {
+      views: m.impression_count ?? null,
+      likes: m.like_count ?? null,
+      comments: m.reply_count ?? null,
+      shares: (m.retweet_count ?? 0) + (m.quote_count ?? 0)
+    };
+  }
 }
 
 module.exports = XAdapter;

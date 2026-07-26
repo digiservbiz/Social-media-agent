@@ -71,5 +71,37 @@ router.get('/', (req, res) => {
   res.json(store.getPosts().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)));
 });
 
+// GET /api/posts/:id/stats -> live views/likes/comments/shares per platform for this post.
+// Fetches fresh from each platform on every call (not cached) and stores the last-known
+// snapshot on the post record so history keeps a value even if a later fetch fails.
+router.get('/:id/stats', async (req, res) => {
+  const post = store.getPost(req.params.id);
+  if (!post) return res.status(404).json({ error: 'Post not found' });
+
+  const succeeded = (post.results || []).filter(r => r.success && r.remotePostId);
+  if (!succeeded.length) return res.json({ postId: post.id, stats: [] });
+
+  const stats = await Promise.all(succeeded.map(async (r) => {
+    try {
+      const account = store.getAccount(r.accountId);
+      const adapter = getAdapter(r.platform);
+      const refreshed = await adapter.refreshTokenIfNeeded(account);
+      if (refreshed !== account) store.upsertAccount(refreshed);
+      const data = await adapter.getPostStats(refreshed, r.remotePostId);
+      return { accountId: r.accountId, platform: r.platform, ...data, fetchedAt: new Date().toISOString() };
+    } catch (err) {
+      return {
+        accountId: r.accountId,
+        platform: r.platform,
+        views: null, likes: null, comments: null, shares: null,
+        error: err.response?.data ? JSON.stringify(err.response.data) : err.message
+      };
+    }
+  }));
+
+  store.updatePost(post.id, { lastStats: stats, lastStatsAt: new Date().toISOString() });
+  res.json({ postId: post.id, stats });
+});
+
 module.exports = router;
 module.exports.publishToAccount = publishToAccount;

@@ -103,6 +103,43 @@ class MetaAdapter extends BaseAdapter {
     });
     return { success: true, remotePostId: res.data.id };
   }
+
+  async getPostStats(account, remotePostId) {
+    if (this.platform === 'instagram') {
+      const res = await axios.get(`${GRAPH}/${remotePostId}`, {
+        params: {
+          fields: 'like_count,comments_count,plays,reach',
+          access_token: account.accessToken
+        }
+      });
+      return {
+        views: res.data.plays ?? res.data.reach ?? null,
+        likes: res.data.like_count ?? null,
+        comments: res.data.comments_count ?? null,
+        shares: null
+      };
+    }
+
+    // Facebook Page post: reactions + comments via field expansion,
+    // impressions via the Insights edge (requires read_insights).
+    const [fieldsRes, insightsRes] = await Promise.all([
+      axios.get(`${GRAPH}/${remotePostId}`, {
+        params: { fields: 'likes.summary(true),comments.summary(true),shares', access_token: account.accessToken }
+      }),
+      axios.get(`${GRAPH}/${remotePostId}/insights`, {
+        params: { metric: 'post_impressions', access_token: account.accessToken }
+      }).catch(() => ({ data: { data: [] } }))
+    ]);
+
+    const impressions = insightsRes.data.data?.find(m => m.name === 'post_impressions')?.values?.[0]?.value ?? null;
+
+    return {
+      views: impressions,
+      likes: fieldsRes.data.likes?.summary?.total_count ?? null,
+      comments: fieldsRes.data.comments?.summary?.total_count ?? null,
+      shares: fieldsRes.data.shares?.count ?? null
+    };
+  }
 }
 
 module.exports = MetaAdapter;

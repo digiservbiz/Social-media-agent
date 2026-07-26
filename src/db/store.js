@@ -60,6 +60,7 @@ module.exports = {
     return post;
   },
   updatePost(id, patch) {
+    // patch may include `results` (per-account stats cache lives inside each result)
     const data = load();
     const idx = data.posts.findIndex(p => p.id === id);
     if (idx < 0) return null;
