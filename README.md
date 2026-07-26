@@ -76,15 +76,23 @@ non-manipulative pattern (like an out-of-office reply), sent once per contact, n
 repeated. This requires setting up a Meta webhook (see below); X and LinkedIn don't
 have the API access needed for a real-time equivalent.
 
-### Setting up the Meta webhook (for DM auto-acknowledge)
+**Comment-to-DM keywords** — set up rules like "if someone comments the word AI on a
+post, send them a DM with this message." This uses Meta's **Private Reply** API — the
+sanctioned mechanism for this exact pattern (the same one behind tools like ManyChat's
+"comment to DM"). It's tied to a specific comment, fires once, and only reaches people
+who chose to comment that word — not a cold/unsolicited DM. Configure it per account in
+the Direct Messages panel; each rule is a keyword + the message to send.
+
+### Setting up the Meta webhook (for DM auto-acknowledge + keyword DMs)
 
 1. Set `META_WEBHOOK_VERIFY_TOKEN` in `.env` to any random string.
 2. In your Meta App dashboard → Webhooks → add a subscription:
    - Callback URL: `https://yourdomain.com/webhooks/meta`
    - Verify token: the same string you put in `.env`
-   - Subscribe to the `messages` field for Page/Instagram
-3. Toggle "Auto-acknowledge" on for the account in the dashboard's Direct Messages
-   panel, and edit the canned message if you want something other than the default.
+   - Subscribe to: `messages` (for DM auto-acknowledge), `feed` (Facebook comments),
+     `comments` (Instagram comments)
+3. In the dashboard's Direct Messages panel: toggle "Auto-acknowledge" and/or add
+   keyword rules for the account you want.
 
 **Retry logic** — a failed publish due to rate-limiting (HTTP 429) is retried once
 automatically after a short delay.
