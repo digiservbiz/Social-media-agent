@@ -5,7 +5,27 @@ engagement stats, drafts AI captions and comment replies, tracks followers, and
 supports an approval queue for multi-client use. Standalone — no dependency on any
 other workflow.
 
-## Setup
+## Quick install (one command)
+
+```bash
+git clone https://github.com/digiservbiz/Social-media-agent.git
+cd Social-media-agent
+./scripts/install.sh
+```
+
+This detects your existing Docker networks (so it can join the same one your n8n
+stack uses), asks for the subdomain you want to run on, sets up `.env` with the
+right redirect URIs pre-filled, opens it in `nano` so you can paste in your API
+credentials, then builds and starts the container. It never touches your existing
+n8n `docker-compose.yml` — it generates its own `docker-compose.generated.yml`
+alongside it.
+
+If you skip picking a network (just press Enter), it runs standalone on port 3300
+and you'll need to handle your own reverse proxy/SSL.
+
+## Manual setup
+
+If you'd rather do it by hand or aren't using Docker:
 
 ```bash
 npm install
