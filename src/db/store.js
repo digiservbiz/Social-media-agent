@@ -73,6 +73,19 @@ module.exports = {
     return load().followerHistory.filter(f => f.accountId === accountId).sort((a, b) => a.at < b.at ? -1 : 1);
   },
 
+  // Tracks which (account, sender) pairs have already received the automatic
+  // first-message acknowledgment, so we don't send it more than once per contact.
+  hasAutoReplied(accountId, senderId) {
+    const data = load();
+    return !!(data.autoRepliedContacts || []).find(c => c.accountId === accountId && c.senderId === senderId);
+  },
+  markAutoReplied(accountId, senderId) {
+    const data = load();
+    if (!data.autoRepliedContacts) data.autoRepliedContacts = [];
+    data.autoRepliedContacts.push({ accountId, senderId, at: new Date().toISOString() });
+    save(data);
+  },
+
   setOAuthState(key, value) {
     const data = load();
     data.oauthState[key] = value;

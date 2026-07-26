@@ -27,7 +27,7 @@ class XAdapter extends BaseAdapter {
       response_type: 'code',
       client_id: this.clientId,
       redirect_uri: this.redirectUri,
-      scope: 'tweet.read tweet.write users.read offline.access',
+      scope: 'tweet.read tweet.write users.read offline.access dm.read dm.write',
       state,
       code_challenge: challenge,
       code_challenge_method: 'S256'
@@ -121,6 +121,41 @@ class XAdapter extends BaseAdapter {
       { headers: { Authorization: `Bearer ${account.accessToken}`, 'Content-Type': 'application/json' } }
     );
     return { success: true, remoteCommentId: res.data.data.id };
+  }
+
+  // NOTE: X's Direct Message endpoints require a paid API tier above the free
+  // level (Basic or Pro) — this will 403 on the free tier. Wired for when you
+  // upgrade or already have access.
+  async listConversations(account) {
+    const res = await axios.get(`${API_BASE}/dm_conversations/with/${account.platformUserId}/dm_events`, {
+      params: { 'dm_event.fields': 'created_at,sender_id,text', max_results: 1 },
+      headers: { Authorization: `Bearer ${account.accessToken}` }
+    }).catch(() => ({ data: { data: [] } }));
+    // X's API doesn't provide a clean "list all conversations" endpoint the way
+    // Meta does — conversations must be tracked from received events. Return
+    // what's resolvable from the events endpoint as a best effort.
+    return (res.data.data || []).map(e => ({
+      id: e.id, participantName: e.sender_id, lastMessage: e.text, updatedAt: e.created_at
+    }));
+  }
+
+  async getMessages(account, conversationId) {
+    const res = await axios.get(`${API_BASE}/dm_conversations/${conversationId}/dm_events`, {
+      params: { 'dm_event.fields': 'created_at,sender_id,text' },
+      headers: { Authorization: `Bearer ${account.accessToken}` }
+    });
+    return (res.data.data || []).map(e => ({
+      id: e.id, from: e.sender_id, fromPage: e.sender_id === account.platformUserId, text: e.text, at: e.created_at
+    }));
+  }
+
+  async sendMessage(account, conversationId, text) {
+    const res = await axios.post(
+      `${API_BASE}/dm_conversations/${conversationId}/messages`,
+      { text },
+      { headers: { Authorization: `Bearer ${account.accessToken}`, 'Content-Type': 'application/json' } }
+    );
+    return { success: true, remoteMessageId: res.data.data?.dm_event_id };
   }
 }
 

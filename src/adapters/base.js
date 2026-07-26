@@ -7,6 +7,9 @@
 //   getFollowerCount(account)            -> number | null
 //   listComments(account, remotePostId)  -> [{ id, text, authorName, createdAt }]
 //   replyToComment(account, commentId, text) -> { success, remoteCommentId }
+//   listConversations(account)           -> [{ id, participantName, lastMessage, updatedAt }]
+//   getMessages(account, conversationId)  -> [{ id, from, text, at, fromPage }]
+//   sendMessage(account, conversationId, text) -> { success, remoteMessageId }
 //
 // content shape passed to publish(): { text, mediaUrls: [], link? }
 class BaseAdapter {
@@ -21,6 +24,9 @@ class BaseAdapter {
   async getFollowerCount() { return null; }
   async listComments() { return []; }
   async replyToComment() { throw new Error(`${this.platform}: replyToComment not implemented`); }
+  async listConversations() { throw new Error(`${this.platform}: direct messages are not supported by this adapter`); }
+  async getMessages() { throw new Error(`${this.platform}: direct messages are not supported by this adapter`); }
+  async sendMessage() { throw new Error(`${this.platform}: direct messages are not supported by this adapter`); }
 }
 
 module.exports = BaseAdapter;

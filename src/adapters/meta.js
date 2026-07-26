@@ -16,7 +16,7 @@ class MetaAdapter extends BaseAdapter {
       client_id: this.appId,
       redirect_uri: this.redirectUri,
       state,
-      scope: 'pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_engagement,instagram_basic,instagram_content_publish,instagram_manage_comments,read_insights'
+      scope: 'pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_engagement,pages_messaging,instagram_basic,instagram_content_publish,instagram_manage_comments,instagram_manage_messages,read_insights'
     });
     return `https://www.facebook.com/v21.0/dialog/oauth?${params.toString()}`;
   }
@@ -180,6 +180,58 @@ class MetaAdapter extends BaseAdapter {
       params: { message: text, access_token: account.accessToken }
     });
     return { success: true, remoteCommentId: res.data.id };
+  }
+
+  // Facebook Page inbox and Instagram DM inbox both live under the Page's
+  // /conversations edge in the Graph API — same shape, different platform field.
+  async listConversations(account) {
+    const pageId = this.platform === 'instagram' ? (account.meta?.igAccountId) : account.platformUserId;
+    if (!pageId) throw new Error('No linked page/account to fetch conversations for.');
+
+    const res = await axios.get(`${GRAPH}/${pageId}/conversations`, {
+      params: {
+        fields: 'participants,updated_time,snippet',
+        platform: this.platform === 'instagram' ? 'instagram' : 'messenger',
+        access_token: account.accessToken
+      }
+    });
+    return (res.data.data || []).map(c => ({
+      id: c.id,
+      participantName: (c.participants?.data || []).find(p => p.id !== pageId)?.name || 'Unknown',
+      lastMessage: c.snippet || '',
+      updatedAt: c.updated_time
+    }));
+  }
+
+  async getMessages(account, conversationId) {
+    const res = await axios.get(`${GRAPH}/${conversationId}/messages`, {
+      params: { fields: 'message,from,created_time', access_token: account.accessToken }
+    });
+    const pageId = this.platform === 'instagram' ? account.meta?.igAccountId : account.platformUserId;
+    return (res.data.data || []).map(m => ({
+      id: m.id,
+      from: m.from?.name || m.from?.id || 'Unknown',
+      fromPage: m.from?.id === pageId,
+      text: m.message || '',
+      at: m.created_time
+    })).reverse();
+  }
+
+  async sendMessage(account, conversationId, text) {
+    // Sending requires the recipient's PSID, not the conversation id directly —
+    // pull it from the conversation's participants first.
+    const convo = await axios.get(`${GRAPH}/${conversationId}`, {
+      params: { fields: 'participants', access_token: account.accessToken }
+    });
+    const pageId = this.platform === 'instagram' ? account.meta?.igAccountId : account.platformUserId;
+    const recipient = (convo.data.participants?.data || []).find(p => p.id !== pageId);
+    if (!recipient) throw new Error('Could not resolve message recipient from conversation.');
+
+    const res = await axios.post(`${GRAPH}/me/messages`, {
+      recipient: { id: recipient.id },
+      message: { text }
+    }, { params: { access_token: account.accessToken } });
+    return { success: true, remoteMessageId: res.data.message_id };
   }
 }
 

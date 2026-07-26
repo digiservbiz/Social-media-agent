@@ -100,6 +100,16 @@
   </div>
 
   <div class="card">
+    <strong>Direct messages</strong>
+    <div class="row" style="margin-bottom:10px;">
+      <select id="dmAccountSelect" onchange="loadConversations()"></select>
+    </div>
+    <div id="dmAutoReplyBox"></div>
+    <div id="conversationList"></div>
+    <div id="conversationView" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="card">
     <strong>History</strong>
     <div class="row" style="margin-bottom:10px;">
       <input id="filterTag" placeholder="Filter by client tag" oninput="loadHistory()">
@@ -135,6 +145,112 @@ async function loadAccounts() {
       <input style="width:140px; display:inline-block; padding:3px 6px; margin:0 6px;" value="${a.clientTag || ''}" placeholder="client tag" onchange="setClientTag('${a.id}', this.value)">
     </div>
   `).join('');
+
+  populateDmAccountSelect();
+}
+
+const DM_CAPABLE_PLATFORMS = ['facebook', 'instagram', 'x'];
+
+function populateDmAccountSelect() {
+  const sel = document.getElementById('dmAccountSelect');
+  const dmAccounts = currentAccounts.filter(a => DM_CAPABLE_PLATFORMS.includes(a.platform));
+  sel.innerHTML = dmAccounts.length
+    ? dmAccounts.map(a => `<option value="${a.id}">${a.platform} — ${a.displayName}</option>`).join('')
+    : '<option value="">No Facebook/Instagram/X accounts connected</option>';
+  if (dmAccounts.length) loadConversations();
+  else { document.getElementById('conversationList').innerHTML = ''; document.getElementById('dmAutoReplyBox').innerHTML = ''; }
+}
+
+function renderAutoReplyBox(account) {
+  const box = document.getElementById('dmAutoReplyBox');
+  if (!account || account.platform === 'x') {
+    box.innerHTML = account?.platform === 'x'
+      ? '<div class="muted">Auto-acknowledge isn\'t wired for X (no public webhook tier on the free API) — use manual draft/send below.</div>'
+      : '';
+    return;
+  }
+  box.innerHTML = `
+    <label class="inline-check"><input type="checkbox" id="autoReplyToggle" ${account.autoReplyEnabled ? 'checked' : ''} onchange="toggleAutoReply('${account.id}')">
+      Auto-acknowledge first message from new contacts</label>
+    <textarea id="autoReplyMsg" style="min-height:44px;" onblur="saveAutoReplyMessage('${account.id}')">${account.autoReplyMessage || "Thanks for reaching out! We've received your message and will get back to you soon."}</textarea>
+    <div class="muted">Requires the Meta webhook configured (see README) — sends once per new contact, never repeats.</div>
+  `;
+}
+
+async function toggleAutoReply(accountId) {
+  const enabled = document.getElementById('autoReplyToggle').checked;
+  await fetch(`/api/accounts/${accountId}`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ autoReplyEnabled: enabled }) });
+  loadAccounts();
+}
+async function saveAutoReplyMessage(accountId) {
+  const msg = document.getElementById('autoReplyMsg').value;
+  await fetch(`/api/accounts/${accountId}`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ autoReplyMessage: msg }) });
+}
+
+async function loadConversations() {
+  const accountId = document.getElementById('dmAccountSelect').value;
+  const account = currentAccounts.find(a => a.id === accountId);
+  renderAutoReplyBox(account);
+  const listEl = document.getElementById('conversationList');
+  document.getElementById('conversationView').innerHTML = '';
+  if (!accountId) { listEl.innerHTML = ''; return; }
+
+  listEl.innerHTML = '<span class="muted">Loading conversations…</span>';
+  const res = await fetch(`/api/dms/${accountId}/conversations`);
+  const data = await res.json();
+  if (data.error) { listEl.innerHTML = `<span class="stats-error">${data.error}</span>`; return; }
+
+  listEl.innerHTML = data.conversations.map(c => `
+    <div class="comment-item" style="cursor:pointer;" onclick="viewConversation('${accountId}','${c.id}')">
+      <span class="author">${c.participantName}</span> — ${c.lastMessage || ''}
+      <span class="muted" style="float:right;">${c.updatedAt ? new Date(c.updatedAt).toLocaleString() : ''}</span>
+    </div>
+  `).join('') || '<span class="muted">No conversations found.</span>';
+}
+
+async function viewConversation(accountId, conversationId) {
+  const view = document.getElementById('conversationView');
+  view.innerHTML = '<span class="muted">Loading messages…</span>';
+  const res = await fetch(`/api/dms/${accountId}/conversations/${conversationId}/messages`);
+  const data = await res.json();
+  if (data.error) { view.innerHTML = `<span class="stats-error">${data.error}</span>`; return; }
+
+  const history = data.messages.map(m => ({ from: m.fromPage ? 'us' : 'them', text: m.text }));
+  view.innerHTML = `
+    <div style="max-height:220px; overflow-y:auto; margin-bottom:8px;">
+      ${data.messages.map(m => `
+        <div class="comment-item" style="${m.fromPage ? 'border-color:#4a90d9;' : ''}">
+          <span class="author">${m.fromPage ? 'Us' : m.from}</span>: ${m.text}
+        </div>
+      `).join('')}
+    </div>
+    <button class="secondary small" onclick='draftDMReply("${accountId}","${conversationId}", ${JSON.stringify(history).replace(/'/g,"&#39;")})'>AI draft reply</button>
+    <div id="dm-reply-area"></div>
+  `;
+}
+
+async function draftDMReply(accountId, conversationId, history) {
+  const area = document.getElementById('dm-reply-area');
+  area.innerHTML = '<span class="muted">Drafting…</span>';
+  const res = await fetch(`/api/dms/${accountId}/conversations/${conversationId}/draft-reply`, {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ history })
+  });
+  const data = await res.json();
+  if (!data.success) { area.innerHTML = `<span class="stats-error">${data.error}</span>`; return; }
+  area.innerHTML = `
+    <textarea id="dm-reply-text">${data.draft}</textarea>
+    <button class="primary small" onclick="sendDMReply('${accountId}','${conversationId}')">Send reply</button>
+  `;
+}
+
+async function sendDMReply(accountId, conversationId) {
+  const text = document.getElementById('dm-reply-text').value;
+  const res = await fetch(`/api/dms/${accountId}/conversations/${conversationId}/reply`, {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ text })
+  });
+  const data = await res.json();
+  const area = document.getElementById('dm-reply-area');
+  area.innerHTML = data.success ? '<span style="color:#7bc47f;">Sent ✓</span>' : `<span class="stats-error">${data.error}</span>`;
 }
 
 async function setClientTag(accountId, clientTag) {

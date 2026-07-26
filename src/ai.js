@@ -58,4 +58,16 @@ Write a short, ${tone} reply (1-2 sentences max). Do not solicit likes, follows,
   return chat(prompt);
 }
 
-module.exports = { generateCaptions, generateCommentReply };
+async function generateDMReply(conversationHistory, tone = 'friendly and helpful, like customer support') {
+  // conversationHistory: array of { from: 'them'|'us', text: '...' }, oldest first
+  const transcript = conversationHistory.map(m => `${m.from === 'us' ? 'Us' : 'Them'}: ${m.text}`).join('\n');
+  const prompt = `You're replying to a direct message conversation as the page/brand owner, in a customer-support style.
+
+Conversation so far:
+${transcript}
+
+Write a short, ${tone} reply to their latest message. Answer what they actually asked or said — don't ask them to like, follow, or share anything, and don't be pushy. Return only the reply text.`;
+  return chat(prompt);
+}
+
+module.exports = { generateCaptions, generateCommentReply, generateDMReply };

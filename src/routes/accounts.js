@@ -3,23 +3,29 @@ const store = require('../db/store');
 
 const router = express.Router();
 
-// GET /api/accounts -> list connected accounts (no tokens leaked to the client)
 router.get('/', (req, res) => {
   const accounts = store.getAccounts().map(({ accessToken, refreshToken, ...safe }) => safe);
   res.json(accounts);
 });
 
-// PATCH /api/accounts/:id -> set a client tag / display label for multi-client use
+// PATCH /api/accounts/:id
+// body: { clientTag?, autoReplyEnabled?, autoReplyMessage? }
+// autoReplyEnabled + autoReplyMessage control the opt-in "first message" auto-
+// acknowledge for inbound DMs (Facebook/Instagram only, via the webhook receiver).
 router.patch('/:id', (req, res) => {
   const account = store.getAccount(req.params.id);
   if (!account) return res.status(404).json({ error: 'Account not found' });
-  const { clientTag } = req.body;
-  const updated = store.upsertAccount({ ...account, clientTag: clientTag ?? account.clientTag ?? null });
+  const { clientTag, autoReplyEnabled, autoReplyMessage } = req.body;
+  const updated = store.upsertAccount({
+    ...account,
+    clientTag: clientTag ?? account.clientTag ?? null,
+    autoReplyEnabled: autoReplyEnabled ?? account.autoReplyEnabled ?? false,
+    autoReplyMessage: autoReplyMessage ?? account.autoReplyMessage ?? "Thanks for reaching out! We've received your message and will get back to you soon."
+  });
   const { accessToken, refreshToken, ...safe } = updated;
   res.json(safe);
 });
 
-// DELETE /api/accounts/:id -> disconnect an account
 router.delete('/:id', (req, res) => {
   store.deleteAccount(req.params.id);
   res.json({ success: true });
