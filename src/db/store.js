@@ -2,9 +2,11 @@
 const fs = require('fs');
 const path = require('path');
 
-const DB_PATH = path.join(__dirname, '..', '..', 'data.json');
+const DB_PATH = path.join(__dirname, '..', '..', 'data', 'data.json');
 
 function load() {
+  const dir = path.dirname(DB_PATH);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   if (!fs.existsSync(DB_PATH)) {
     const initial = { accounts: [], posts: [], oauthState: {}, followerHistory: [] };
     fs.writeFileSync(DB_PATH, JSON.stringify(initial, null, 2));

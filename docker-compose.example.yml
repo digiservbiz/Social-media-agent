@@ -1,0 +1,28 @@
+# Example service block to add to your existing n8n docker-compose.yml.
+# Adjust the network name to match whatever network your n8n/Traefik stack
+# already uses (check with: docker network ls)
+
+services:
+  social-poster:
+    build: ./Social-media-agent   # path to where you cloned this repo
+    container_name: social-poster
+    restart: unless-stopped
+    env_file:
+      - ./Social-media-agent/.env
+    volumes:
+      - social-poster-data:/app/data   # persists posts/accounts across restarts
+    networks:
+      - your_n8n_network   # <-- replace with your actual network name
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.social-poster.rule=Host(`social.yourdomain.com`)"
+      - "traefik.http.routers.social-poster.entrypoints=websecure"
+      - "traefik.http.routers.social-poster.tls.certresolver=letsencrypt"
+      - "traefik.http.services.social-poster.loadbalancer.server.port=3300"
+
+volumes:
+  social-poster-data:
+
+networks:
+  your_n8n_network:
+    external: true
