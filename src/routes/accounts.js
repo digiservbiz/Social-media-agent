@@ -9,18 +9,20 @@ router.get('/', (req, res) => {
 });
 
 // PATCH /api/accounts/:id
-// body: { clientTag?, autoReplyEnabled?, autoReplyMessage? }
-// autoReplyEnabled + autoReplyMessage control the opt-in "first message" auto-
-// acknowledge for inbound DMs (Facebook/Instagram only, via the webhook receiver).
+// body: { clientTag?, autoReplyEnabled?, autoReplyMessage?, keywordDmRules? }
+// keywordDmRules: [{ keyword: "AI", message: "Thanks for asking about AI! Here's..." }]
+// When someone comments a keyword on a post, they get a private-reply DM tied to
+// that comment — Meta's sanctioned comment-to-DM mechanism.
 router.patch('/:id', (req, res) => {
   const account = store.getAccount(req.params.id);
   if (!account) return res.status(404).json({ error: 'Account not found' });
-  const { clientTag, autoReplyEnabled, autoReplyMessage } = req.body;
+  const { clientTag, autoReplyEnabled, autoReplyMessage, keywordDmRules } = req.body;
   const updated = store.upsertAccount({
     ...account,
     clientTag: clientTag ?? account.clientTag ?? null,
     autoReplyEnabled: autoReplyEnabled ?? account.autoReplyEnabled ?? false,
-    autoReplyMessage: autoReplyMessage ?? account.autoReplyMessage ?? "Thanks for reaching out! We've received your message and will get back to you soon."
+    autoReplyMessage: autoReplyMessage ?? account.autoReplyMessage ?? "Thanks for reaching out! We've received your message and will get back to you soon.",
+    keywordDmRules: keywordDmRules ?? account.keywordDmRules ?? []
   });
   const { accessToken, refreshToken, ...safe } = updated;
   res.json(safe);

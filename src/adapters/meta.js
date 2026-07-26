@@ -182,6 +182,17 @@ class MetaAdapter extends BaseAdapter {
     return { success: true, remoteCommentId: res.data.id };
   }
 
+  // Private Reply: Meta's sanctioned way to DM someone who commented on your post,
+  // tied to that specific comment. This is the same mechanism behind "comment a
+  // keyword to get a DM" tools — a one-time message per comment, not a cold DM.
+  // Works for both Facebook Page comments and Instagram comments (same edge).
+  async sendPrivateReply(account, commentId, text) {
+    const res = await axios.post(`${GRAPH}/${commentId}/private_replies`, null, {
+      params: { message: text, access_token: account.accessToken }
+    });
+    return { success: true, remoteMessageId: res.data.id };
+  }
+
   // Facebook Page inbox and Instagram DM inbox both live under the Page's
   // /conversations edge in the Graph API — same shape, different platform field.
   async listConversations(account) {

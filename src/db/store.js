@@ -86,6 +86,19 @@ module.exports = {
     save(data);
   },
 
+  // Tracks which comments have already triggered a keyword-DM, so a comment
+  // never fires the private reply more than once even if the webhook redelivers.
+  hasHandledCommentDm(commentId) {
+    const data = load();
+    return !!(data.handledCommentDms || []).includes(commentId);
+  },
+  markCommentDmHandled(commentId) {
+    const data = load();
+    if (!data.handledCommentDms) data.handledCommentDms = [];
+    data.handledCommentDms.push(commentId);
+    save(data);
+  },
+
   setOAuthState(key, value) {
     const data = load();
     data.oauthState[key] = value;

@@ -27,23 +27,20 @@ router.post('/meta', express.json(), async (req, res) => {
     const entries = req.body.entry || [];
     for (const entry of entries) {
       const pageId = entry.id;
-      const events = entry.messaging || [];
-      for (const event of events) {
-        if (!event.message || event.message.is_echo) continue; // ignore our own sent messages
 
+      // Inbound messages -> first-message auto-acknowledge
+      const messagingEvents = entry.messaging || [];
+      for (const event of messagingEvents) {
+        if (!event.message || event.message.is_echo) continue;
         const senderId = event.sender?.id;
         if (!senderId) continue;
 
-        // Find the connected account this page/IG id belongs to
         const account = store.getAccounts().find(a =>
           a.platformUserId === pageId || a.meta?.igAccountId === pageId
         );
         if (!account || !account.autoReplyEnabled) continue;
         if (store.hasAutoReplied(account.id, senderId)) continue;
 
-        const adapter = getAdapter(account.platform);
-        // sendMessage expects a conversation id in our other endpoints, but the
-        // Send API also accepts a direct recipient id — reuse the same PSID here.
         try {
           const axios = require('axios');
           await axios.post('https://graph.facebook.com/v21.0/me/messages', {
@@ -54,6 +51,37 @@ router.post('/meta', express.json(), async (req, res) => {
           console.log(`[webhook] Auto-acknowledged first message from ${senderId} on ${account.platform}`);
         } catch (err) {
           console.error('[webhook] Auto-reply send failed:', err.response?.data || err.message);
+        }
+      }
+
+      // New comments -> keyword-triggered private reply DM
+      const changes = entry.changes || [];
+      for (const change of changes) {
+        const isFbComment = change.field === 'feed' && change.value?.item === 'comment' && change.value?.verb === 'add';
+        const isIgComment = change.field === 'comments';
+        if (!isFbComment && !isIgComment) continue;
+
+        const commentId = change.value?.comment_id || change.value?.id;
+        const commentText = change.value?.message || change.value?.text || '';
+        if (!commentId || !commentText) continue;
+
+        const account = store.getAccounts().find(a =>
+          a.platformUserId === pageId || a.meta?.igAccountId === pageId
+        );
+        if (!account || !account.keywordDmRules?.length) continue;
+        if (store.hasHandledCommentDm(commentId)) continue;
+
+        const lowerText = commentText.toLowerCase();
+        const rule = account.keywordDmRules.find(r => r.keyword && lowerText.includes(r.keyword.toLowerCase()));
+        if (!rule) continue;
+
+        try {
+          const adapter = getAdapter(account.platform);
+          await adapter.sendPrivateReply(account, commentId, rule.message);
+          store.markCommentDmHandled(commentId);
+          console.log(`[webhook] Keyword "${rule.keyword}" matched on comment ${commentId} — private reply sent on ${account.platform}`);
+        } catch (err) {
+          console.error('[webhook] Keyword-DM private reply failed:', err.response?.data || err.message);
         }
       }
     }
